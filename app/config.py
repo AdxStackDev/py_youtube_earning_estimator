@@ -1,13 +1,30 @@
 """Configuration module for YouTube Earnings Estimator.
 
 Loads settings from environment variables and .env file using pydantic-settings.
+Also supports Streamlit Community Cloud secrets (st.secrets).
 System environment variables take precedence over .env file values.
 """
 
+import os
 from functools import lru_cache
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _load_streamlit_secrets() -> None:
+    """Load Streamlit secrets into environment variables if available."""
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets") and "YOUTUBE_API_KEY" in st.secrets:
+            for key in st.secrets:
+                if key not in os.environ:
+                    os.environ[key] = str(st.secrets[key])
+    except Exception:
+        pass
+
+
+_load_streamlit_secrets()
 
 
 class Settings(BaseSettings):

@@ -6,10 +6,31 @@ toggles, a revenue-structure breakdown, and a standalone earnings calculator.
 
 from datetime import datetime
 
-import httpx
 import streamlit as st
 
-API_BASE_URL = "http://127.0.0.1:8000"
+from app.cache import CacheManager
+from app.config import get_settings
+from app.estimator import Estimator
+from app.exceptions import ChannelNotFoundError, ValidationError, YouTubeAPIError
+from app.service import EstimationService
+from app.youtube_client import YouTubeClient
+
+
+@st.cache_resource
+def get_service() -> EstimationService:
+    """Create and cache the estimation service singleton."""
+    settings = get_settings()
+    client = YouTubeClient(api_key=settings.YOUTUBE_API_KEY, timeout=settings.API_TIMEOUT_SECONDS)
+    estimator = Estimator()
+    cache = CacheManager(settings)
+    return EstimationService(
+        youtube_client=client,
+        estimator=estimator,
+        cache=cache,
+        rpm_shorts_low=settings.RPM_SHORTS_LOW,
+        rpm_shorts_high=settings.RPM_SHORTS_HIGH,
+        ads_share=settings.ADS_REVENUE_SHARE,
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -377,52 +398,36 @@ def format_date(iso: str | None) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# API call
+# API call (direct, no backend server needed)
 # --------------------------------------------------------------------------- #
 def fetch_estimate(query: str) -> dict | None:
-    """Call the backend /estimate endpoint. Returns data dict or None on error."""
+    """Call the estimation service directly. Returns data dict or None on error."""
+    settings = get_settings()
+    service = get_service()
+
     try:
-        response = httpx.get(
-            f"{API_BASE_URL}/estimate",
-            params={"q": query.strip()},
-            timeout=30.0,
-        )
-    except httpx.ConnectError:
-        st.error(
-            "Could not connect to the API server. "
-            "Make sure the backend is running: `uvicorn app.main:app --port 8000`."
-        )
+        response = service.estimate(query, settings.RPM_LOW, settings.RPM_HIGH)
+        return response.model_dump()
+    except ValidationError as e:
+        st.warning(str(e))
         return None
-    except httpx.TimeoutException:
-        st.error("The request timed out. Please try again.")
+    except ChannelNotFoundError:
+        st.error("Channel not found. Please check the name/URL and try again.")
         return None
-    except httpx.HTTPError:
-        st.error("An unexpected network error occurred. Please try again.")
+    except YouTubeAPIError as e:
+        if e.status_code == 408:
+            st.error("The request timed out. Please try again.")
+        else:
+            st.error("YouTube API is temporarily unavailable. Please try again later.")
         return None
-
-    if response.status_code != 200:
-        _display_error(response)
-        return None
-
-    return response.json()
-
-
-def _display_error(response: httpx.Response) -> None:
-    """Display a user-friendly error message based on the API response."""
-    status = response.status_code
-    try:
-        detail = response.json().get("detail", "")
     except Exception:
-        detail = ""
-
-    if status == 404:
-        st.error(f"Channel not found. {detail}".strip())
-    elif status == 422:
-        st.warning("Invalid input. Please provide a valid channel name, handle, or URL.")
-    elif status == 502:
-        st.error("The YouTube API is temporarily unavailable. Please try again later.")
-    else:
         st.error("An unexpected error occurred. Please try again later.")
+        return None
+
+
+def _display_error(response) -> None:
+    """Kept for compatibility but not used in direct mode."""
+    pass
 
 
 # --------------------------------------------------------------------------- #
