@@ -1,165 +1,128 @@
-# YouTube Earnings Estimator
+# YouTube Money Calculator 💰
 
-A Python backend service and Streamlit dashboard that estimates YouTube channel monthly earnings using publicly available data and a configurable RPM (Revenue Per Mille) model.
+Ever wondered how much your favorite YouTuber actually makes? I built this tool to scratch that itch. It pulls real data from YouTube's API and estimates channel earnings based on RPM (Revenue Per Mille) — basically what creators earn per 1,000 views.
 
-## Features
+It's not perfect (no public tool is — YouTube doesn't share actual revenue numbers), but it gets pretty close using the same methodology that tools like Social Blade use, except this one's open source and you can tweak the RPM values yourself.
 
-- **Channel resolution** — Accepts YouTube handles (`@channel`), full URLs, or plain-text search queries
-- **Earnings estimation** — Calculates low, medium, and high monthly earnings based on recent video performance and configurable RPM range
-- **Caching** — Multi-tier TTL cache (channel IDs, stats, videos) with LRU eviction to reduce API calls
-- **REST API** — FastAPI endpoint for programmatic access with full validation and error handling
-- **Streamlit dashboard** — Interactive web UI to look up any channel and view estimated earnings
+## What it looks like
 
-## Prerequisites
+Here's the dashboard in action:
+
+### Enter Channel name for lookup
+![Form to enter channel name for lookup](snaps/screencapture_1.png)
+
+### Manual calculator tab
+![Manual earnings calculator](snaps/screencapture_2.png)
+
+### Channel earnings overview with video & shorts previews with thumbnails
+![Channel earnings overview & recent videos and shorts grid](snaps/screencapture_3.png)
+
+## What it does
+
+- **Look up any YouTube channel** — paste a handle like `@mkbhd`, a full URL, or just search by name
+- **Get estimated monthly/yearly earnings** — broken down into low, medium, and high estimates
+- **See revenue structure** — how much comes from ads vs YouTube Premium
+- **Browse recent videos & Shorts** — with thumbnails, view counts, and direct YouTube links
+- **Manual calculator** — plug in your own numbers (daily views, RPM range) to estimate earnings without looking up a channel
+- **Dark themed UI** — easy on the eyes, YouTube-branded red accents
+
+## Tech I used
+
+| Layer | What | Why |
+|-------|------|-----|
+| Backend | FastAPI | Fast, clean, auto-docs at `/docs` |
+| Frontend | Streamlit | Quick to build, looks decent out of the box |
+| YouTube data | YouTube Data API v3 | Official source, reliable |
+| Caching | cachetools (in-memory TTL) | Avoid hammering the API quota |
+| Validation | Pydantic | Type safety without boilerplate |
+| HTTP | httpx | Modern Python HTTP client |
+| Testing | pytest + Hypothesis | Unit tests + property-based testing |
+
+## Getting started
+
+### Prerequisites
 
 - Python 3.12+
-- [YouTube Data API v3](https://console.cloud.google.com/apis/library/youtube.googleapis.com) key
+- A YouTube Data API v3 key (get one from [Google Cloud Console](https://console.cloud.google.com/apis/library/youtube.googleapis.com))
 
-## Environment Variables
-
-Copy `.env.example` to `.env` and fill in your values:
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `YOUTUBE_API_KEY` | Yes | — | Your YouTube Data API v3 key |
-| `RPM_LOW` | No | `0.50` | Low-end RPM estimate (USD per 1,000 views) |
-| `RPM_HIGH` | No | `4.00` | High-end RPM estimate (USD per 1,000 views) |
-| `CACHE_TTL_SECONDS` | No | `3600` | General cache TTL in seconds |
-| `API_TIMEOUT_SECONDS` | No | `10` | HTTP timeout for YouTube API requests |
-| `CACHE_CHANNEL_TTL` | No | `86400` | Channel ID cache TTL (24 hours) |
-| `CACHE_STATS_TTL` | No | `3600` | Channel stats cache TTL (1 hour) |
-| `CACHE_VIDEOS_TTL` | No | `1800` | Recent videos cache TTL (30 minutes) |
-| `CACHE_MAX_SIZE` | No | `1000` | Maximum number of cache entries (LRU eviction) |
-
-## Local Setup
-
-1. **Install dependencies**
+### Setup
 
 ```bash
+# Clone it
+git clone <your-repo-url>
+cd youtube-earnings-estimator
+
+# Install deps
 pip install -r requirements.txt
-```
 
-2. **Configure environment**
-
-```bash
+# Set up your API key
 cp .env.example .env
-# Edit .env and add your YOUTUBE_API_KEY
+# Open .env and paste your YOUTUBE_API_KEY
 ```
 
-3. **Run the API**
+### Run it
 
+You need two terminals — one for the API backend, one for the Streamlit frontend:
+
+**Terminal 1 — API server:**
 ```bash
 uvicorn app.main:app --reload --port 8000
 ```
 
-The API will be available at `http://localhost:8000`.
-
-4. **Run the Streamlit dashboard**
-
+**Terminal 2 — Dashboard:**
 ```bash
 streamlit run streamlit_app.py
 ```
 
-The dashboard will open at `http://localhost:8501` by default.
+Open `http://localhost:8501` and start looking up channels.
 
-## Docker Usage
-
-**Build the image:**
+### Docker (alternative)
 
 ```bash
-docker build -t youtube-earnings-estimator .
+docker build -t yt-earnings .
+docker run -p 8000:8000 --env-file .env yt-earnings
 ```
 
-**Run the container:**
+## Configuration
 
-```bash
-docker run -p 8000:8000 --env-file .env youtube-earnings-estimator
-```
+All config goes in `.env`. Only `YOUTUBE_API_KEY` is required — everything else has sane defaults:
 
-The API will be available at `http://localhost:8000`.
+| Variable | Default | What it does |
+|----------|---------|--------------|
+| `YOUTUBE_API_KEY` | — | Your API key (required) |
+| `RPM_LOW` | `0.50` | Low-end RPM for long-form content |
+| `RPM_HIGH` | `4.00` | High-end RPM for long-form content |
+| `API_TIMEOUT_SECONDS` | `10` | How long to wait for YouTube's API |
+| `CACHE_CHANNEL_TTL` | `86400` | Channel ID cache (24h) |
+| `CACHE_STATS_TTL` | `3600` | Stats cache (1h) |
+| `CACHE_VIDEOS_TTL` | `1800` | Video list cache (30min) |
+| `CACHE_MAX_SIZE` | `1000` | Max cached entries before LRU kicks in |
 
-## API Endpoint Reference
+## API reference
 
-### Health Check
-
-```
-GET /health
-```
-
-**Response** `200 OK`
-
-```json
-{
-  "status": "ok"
-}
-```
-
-### Estimate Earnings
+If you want to hit the backend directly:
 
 ```
-GET /estimate?q=<channel_query>
+GET /estimate?q=@mkbhd
 ```
 
-**Query Parameters:**
+Returns JSON with channel stats, earnings breakdown, and recent videos. Full docs at `http://localhost:8000/docs` when the server's running.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `q` | string | Yes | Channel handle, URL, or search query (1–256 chars) |
-| `rpm_low` | float | No | Override low RPM (0.01–100.0) |
-| `rpm_high` | float | No | Override high RPM (0.01–100.0) |
+Quick error codes:
+- `404` — channel not found
+- `422` — bad input (empty query, invalid RPM)
+- `502` — YouTube API is down or timed out
 
-**Response** `200 OK`
-
-```json
-{
-  "channel_title": "Example Channel",
-  "subscriber_count": 1500000,
-  "total_views": 500000000,
-  "video_count": 320,
-  "estimated_monthly_views": 2400000.0,
-  "earnings_low": 1200.00,
-  "earnings_medium": 5400.00,
-  "earnings_high": 9600.00,
-  "rpm_low": 0.5,
-  "rpm_high": 4.0,
-  "recent_videos": [
-    {
-      "video_id": "abc123",
-      "title": "Latest Video Title",
-      "view_count": 600000
-    }
-  ]
-}
-```
-
-### Error Responses
-
-| Status | Condition | Body |
-|--------|-----------|------|
-| `404` | Channel not found | `{"detail": "Channel not found for query: ..."}` |
-| `422` | Invalid input (empty query, bad RPM values) | `{"detail": "..."}` |
-| `502` | YouTube API error or timeout | `{"detail": "..."}` |
-| `500` | Unexpected server error | `{"detail": "Internal server error"}` |
-
-## Tech Stack
-
-- **[FastAPI](https://fastapi.tiangolo.com/)** — Web framework and API layer
-- **[httpx](https://www.python-httpx.org/)** — Async HTTP client for YouTube API calls
-- **[cachetools](https://cachetools.readthedocs.io/)** — In-memory TTL + LRU caching
-- **[Pydantic](https://docs.pydantic.dev/)** — Data validation and settings management
-- **[Streamlit](https://streamlit.io/)** — Interactive dashboard UI
-- **[pytest](https://docs.pytest.org/)** — Test framework
-- **[Hypothesis](https://hypothesis.readthedocs.io/)** — Property-based testing
-- **[respx](https://lundberg.github.io/respx/)** — Mock httpx requests in tests
-
-## Running Tests
-
-```bash
-pytest
-```
-
-To run with verbose output:
+## Running tests
 
 ```bash
 pytest -v
 ```
+
+## Disclaimer
+
+These are **estimates**. Actual creator earnings depend on dozens of factors — ad rates, audience geography, content category, sponsorships, memberships, etc. Don't make financial decisions based on this tool. It's for curiosity and fun.
+
+## License
+
+Do whatever you want with it. If you build something cool on top, let me know.
