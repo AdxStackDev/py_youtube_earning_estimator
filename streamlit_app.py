@@ -8,6 +8,13 @@ from datetime import datetime
 
 import streamlit as st
 
+# MUST be the very first Streamlit command
+st.set_page_config(
+    page_title="YouTube Money Calculator",
+    page_icon="\u25b6\ufe0f",
+    layout="centered",
+)
+
 from app.cache import CacheManager
 from app.config import get_settings
 from app.estimator import Estimator
@@ -446,6 +453,30 @@ def render_channel_summary(data: dict) -> None:
         else '<div class="channel-avatar" style="background:#FF0000;"></div>'
     )
 
+    # Monetization eligibility check (YouTube Partner Program requirements):
+    # - 1,000+ subscribers
+    # - 4,000+ public watch hours in last 12 months (we estimate from views)
+    # We can't know actual watch hours, so we use a heuristic:
+    # If subs >= 1000 and total_views >= 100,000 => likely monetized
+    subs = data.get("subscriber_count", 0)
+    total_views = data.get("total_views", 0)
+    is_likely_monetized = subs >= 1000 and total_views >= 100_000
+
+    if is_likely_monetized:
+        monetize_badge = (
+            '<span style="display:inline-block; background:#1B5E20; color:#A5D6A7; '
+            'font-size:0.72rem; font-weight:600; padding:0.2rem 0.6rem; '
+            'border-radius:999px; margin-left:0.5rem;">'
+            '\u2713 Likely Monetized</span>'
+        )
+    else:
+        monetize_badge = (
+            '<span style="display:inline-block; background:#4A1010; color:#EF9A9A; '
+            'font-size:0.72rem; font-weight:600; padding:0.2rem 0.6rem; '
+            'border-radius:999px; margin-left:0.5rem;">'
+            '\u2717 Not Eligible</span>'
+        )
+
     stats_html = "".join(
         f'<div class="stat-tile"><div class="stat-label">{lbl}</div>'
         f'<div class="stat-value">{val}</div></div>'
@@ -459,7 +490,7 @@ def render_channel_summary(data: dict) -> None:
 
     st.markdown(
         f"""<div class="premium-card">
-            <div class="premium-card-title">Channel summary</div>
+            <div class="premium-card-title">Channel summary {monetize_badge}</div>
             <div class="channel-head">
                 {avatar_html}
                 <div style="flex:1;">
@@ -504,12 +535,12 @@ def _render_channel_estimator_tab(data: dict | None) -> None:
     with tcol2:
         focus = st.radio(
             "Content focus",
-            options=["Long-form", "Shorts"],
+            options=["Videos", "Shorts"],
             horizontal=True,
             key="content_focus",
         )
 
-    breakdown = data["long_form"] if focus == "Long-form" else data["shorts"]
+    breakdown = data["long_form"] if focus == "Videos" else data["shorts"]
     window_mult = 12 if window == "Yearly" else 1
 
     medium = breakdown["earnings_medium"] * window_mult
@@ -700,11 +731,6 @@ def render_disclaimer() -> None:
 # --------------------------------------------------------------------------- #
 def main() -> None:
     """Run the Streamlit dashboard."""
-    st.set_page_config(
-        page_title="YouTube Money Calculator",
-        page_icon="\u25b6\ufe0f",
-        layout="centered",
-    )
     inject_premium_css()
 
     # Brand bar
