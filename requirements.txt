@@ -8,4 +8,4 @@ cachetools>=5.5.0
 streamlit>=1.41.0
 pytest>=8.3.0
 respx>=0.22.0
-hypothesis>=6.122.0
+hypothesis>=6.156.4
